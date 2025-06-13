@@ -2,6 +2,7 @@ import requests
 import pandas as pd
 import time
 from datetime import datetime
+import json
 
 API_key = 'eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjUyNTg3NjcwMCwiYWFpIjoxMSwidWlkIjo3NTE3MTU4NCwiaWFkIjoiMjAyNS0wNi0xM1QwMDo0MDo0Ny4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MjY5NzE0OTYsInJnbiI6InVzZTEifQ.V_Gn7B-YJWoqeRiTKOX-tbrd2Ex7gDBPgs5COhVjFmw'
 board_id = '8585885825'
@@ -12,52 +13,60 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-def count_scheduled(board_id):
-    query = """
-    query ($board_id: [ID!]!) {
-        boards(ids: $board_id) {
-        items_count
-        }
-    }
-    """
-    variables = {"board_id": [str(board_id)]}
-    response = requests.post(url, json={"query": query, "variables": variables}, headers=HEADERS)
-
-    data = response.json()
-    number_scheduled = data["data"]["boards"][0]["items_count"]
-    return number_scheduled
-
 
 def fetch_board_items(board_id):
     query = """
-        query ($board_id: [ID!]!) {
-        boards(ids: $board_id) {
-            items_page(limit: 1000) {
-            items {
-                id
-                name
-                column_values {
-                id
-                text
-                value
-                }
+    query ($board_id: [ID!]!, $cursor: String) {
+      boards(ids: $board_id) {
+        items_page(limit: 500, cursor: $cursor) {
+          cursor
+          items {
+            id
+            name
+            column_values {
+              id
+              text
+              value
             }
-            }
+          }
         }
+      }
     }
     """
-    variables = {"board_id": [str(board_id)]}
 
-    response = requests.post(url, json={"query": query, "variables": variables}, headers=HEADERS)
+    all_items = []
+    cursor = None
 
-    if response.status_code != 200:
-        raise Exception(f"Query failed with status {response.status_code}: {response.text}")
+    while True:
+        variables = {
+            "board_id": [str(board_id)],
+            "cursor": cursor
+        }
 
-    data = response.json()
-    items = data["data"]["boards"][0]["items_page"]["items"]
+        response = requests.post(url, json={"query": query, "variables": variables}, headers=HEADERS)
+
+        if response.status_code != 200:
+            raise Exception(f"Query failed with status {response.status_code}: {response.text}")
+
+        data = response.json()
+        board_data = data["data"]["boards"][0]
+
+        if not board_data or "items_page" not in board_data:
+            raise Exception("No items_page data found in response.")
+
+        page = board_data["items_page"]
+        items = page["items"]
+        all_items.extend(items)
+
+        cursor = page.get("cursor")
+        if not cursor:
+            break
+        
+        # Delays to prevent overloading Monday
+        time.sleep(0.2)
 
     rows = []
-    for item in items:
+    for item in all_items:
         row = {"Item ID": item["id"], "Item Name": item["name"]}
         for col in item["column_values"]:
             row[col["id"]] = col["text"]
