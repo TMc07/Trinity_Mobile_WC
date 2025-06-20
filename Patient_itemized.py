@@ -40,7 +40,7 @@ def Capitalizing_ALL(df):
         .str.replace(' ', '', regex=False)              
         .str.replace(r'(,)?JR$', '', regex=True)        
         .str.replace(r'(G|J)$', '', regex=True) 
-        .str.replace(r'JR$', '', regex=True)          
+        .str.replace(r'(G|J)$', '', regex=True)           
     )
     df = df.rename(columns={'Item Name': 'Patient_Name'})
     return df
@@ -49,10 +49,47 @@ def Capitalizing_ALL(df):
 def clean_patient_name(name):
     if pd.isnull(name):
         return name
+    
+    name = str(name)
     name = re.sub(r'^JR[\s,]*', '', name)
     name = name.strip()
     name = re.sub(r'(\d{1,2}/\d{1,2}(/?\d{2,4})?)$', '', name)
-    name = name.replace(' ', '')
+    name = name.replace(' ', ',')
+    name = name.upper()
+    name = name.replace('"', '')
+    name = name.replace("'", "")
+    # Fixing if there is now 2x , from the above 
+    name = name.replace(",,", ",")
+    name = re.sub(r',(LVN|DO|RN|NP|FNP)$', '', name)
+
+    if str(name).strip().upper() == 'FRASER,-,SHANNA,RENEE,FRASER':
+        return 'SHANNA,FRASER'
+
+    if str(name).strip().upper() == 'GUIDRY,BETHANY':
+        return 'BETHANY,GUIDRY'
+    
+    if str(name).strip().upper() == 'LOPEZ,BRIA':
+        return 'BRIA,LOPEZ'
+    
+    if str(name).strip().upper() == 'BECKEY,-,ARIEL,BECKEY':
+        return 'ARIEL,BECKEY'
+    
+    if str(name).strip().upper() == 'BECKEY,ARIEL':
+        return 'ARIEL,BECKEY'
+    
+    if str(name).strip().upper() == 'TREVINO,PEARL':
+        return 'PEARL,TREVINO'
+    
+    if str(name).strip().upper() == 'PALMER,BRANDON':
+        return 'BRANDON,PALMER'
+   
+    if str(name).strip().upper() == 'ARIEL,BECKEY,BRIA,LOPEZ':
+        return 'BRIA,LOPEZ'
+    
+    if str(name).strip().upper() == 'VILLARREAL,VANESSA':
+        return 'VANESSA,VILLARREAL'
+    
+    
     return name
 
 # In its current form the billing data == patient data
@@ -76,21 +113,24 @@ def master_set_fcn(patient_data , Census_data, Scheduling_Texas_data, Incoming_R
         on='Patient_Name',
         how='left'
     )
-    master_set.to_csv('removeme1.csv', index=False)
+    master_set['conserv_dum'] = (master_set['dropdown_mkrxh1cs'] == 'Active Conservative Patient').astype(int)
+    master_set['grafting_dum'] = master_set['dropdown_mkrxh1cs'].isin([
+    'Preparing for Skins Subs',
+    'Actively Receiving Skin Subs']).astype(int)
+    master_set.to_csv('master_set.csv', index=False)
     return master_set
 
 def Patient_Itemized(master_set, timestamp):
-    print(master_set.columns.tolist())
     master_set['Patient_Name'] = master_set['Patient_Name'].apply(clean_patient_name)
     Charge_codes = ['numeric_mkng945v', 'numeric_mkng1ekp', 'numeric_mkngdap1', 'numeric_mkngbb06',
                 'numeric_mknghpcs', 'numeric_mkng9d2s', 'numeric_mkng6bmr', 'numeric_mkqnk160', 'numeric_mkqn9t3r']
 
     master_set['Total_Billed'] = master_set[Charge_codes].sum(axis=1)
+    master_set['color_mkngbtn2'] = master_set['color_mkngbtn2'].fillna('Not_Processed_Yet')
     Group_counts = master_set.groupby(['Patient_Name', 'color_mkngbtn2']).size().unstack(fill_value=0)
 
     billed_sums = master_set.groupby('Patient_Name')['Total_Billed'].sum().to_frame(name='Total_Billed')
     marketers_dist = master_set.groupby('Patient_Name')['multiple_person_mkqagt70'].first().reset_index()
-    print(marketers_dist.head())
 
     Group_counts = master_set.groupby(['Patient_Name', 'color_mkngbtn2']).size().unstack(fill_value=0)
     billed_sums = master_set.groupby('Patient_Name')['Total_Billed'].sum().to_frame(name='Total_Billed')
@@ -119,7 +159,8 @@ def Provider_Itemized(master_set, timestamp):
                 'numeric_mknghpcs', 'numeric_mkng9d2s', 'numeric_mkng6bmr', 'numeric_mkqnk160', 'numeric_mkqn9t3r']
 
     master_set = master_set.rename(columns={'dropdown_mkngnttn': 'Provider_Name'})
-
+    master_set['Provider_Name'] = master_set['Provider_Name'].astype(str)
+    master_set['Provider_Name'] = master_set['Provider_Name'].apply(clean_patient_name)
     master_set['Total_Billed'] = master_set[Charge_codes].sum(axis=1)
 
     Group_counts = master_set.groupby(['Provider_Name', 'color_mkngbtn2']).size().unstack(fill_value=0)
@@ -140,18 +181,45 @@ def Provider_Itemized(master_set, timestamp):
     Provider_NoNote = Provider_NoNote.sort_values(by='No Note on File', ascending=False)
     Provider_NoNote.to_csv(f"Provider_No_Note_{timestamp}.csv", index=True)
 
-def Marketer_Itemized(collapsed_Patient_Name, timestamp):
+def Marketer_Itemized(collapsed_Patient_Name, master_set, timestamp):
     collapsed_Patient_Name['multiple_person_mkqagt70'] = collapsed_Patient_Name['multiple_person_mkqagt70'].fillna('NA')
-
+    # This is wound size numeric_mknjsfxc
     Incoming_Referrals_Texas = collapsed_Patient_Name.rename(columns={'multiple_person_mkqagt70': 'Marketer_Name'})
-    print(Incoming_Referrals_Texas.head())
+    Incoming_Referrals_Texas.to_csv(f"remove_{timestamp}.csv", index=True)
 
+    #Pulls Wound size back in
+    WoundxPatient = master_set[['Patient_Name', 'numeric_mknjsfxc', 'dropdown_mkrxh1cs']].drop_duplicates()
+    Incoming_Referrals_Texas = Incoming_Referrals_Texas.merge(WoundxPatient, on = 'Patient_Name', how = 'left')
+    Incoming_Referrals_Texas = Incoming_Referrals_Texas.rename(columns={'numeric_mknjsfxc': 'Wound_size_cm'})
+    print(Incoming_Referrals_Texas)
     # Collapses back down to just the number of patients by each marketer
+
     Incoming_Referrals_Texas = Incoming_Referrals_Texas.reset_index()
-    Marketer_Sums = Incoming_Referrals_Texas.groupby('Marketer_Name')['Patient_Name'].count().to_frame(name='Total_Patients')
-
-
+    Marketer_Sums = Incoming_Referrals_Texas.groupby('Marketer_Name').agg(
+    Total_Wound_Size_cm = ('Wound_size_cm', 'sum'),
+    Patient_Count = ('Patient_Name', 'nunique')
+)
+    
     Marketer_Sums.to_csv(f"Marketer_Sums_{timestamp}.csv", index=True)
+    Incoming_Referrals_Texas.to_csv('removeme444.csv')
+    Incoming_Referrals_Texas_Active = Incoming_Referrals_Texas[
+    Incoming_Referrals_Texas['dropdown_mkrxh1cs'] != 'Discharged From Pratice']
+
+    Marketer_Sums_Current = Incoming_Referrals_Texas_Active.groupby('Marketer_Name').agg(
+    Total_Wound_Size_cm = ('Wound_size_cm', 'sum'),
+    Patient_Count = ('Patient_Name', 'nunique')
+    )
+    
+    Marketer_Sums_Current.to_csv(f"Marketer_Sums_ActivePatients_{timestamp}.csv", index=True)
+
+    Incoming_Referrals_Texas_PendingSkin = Incoming_Referrals_Texas[
+    Incoming_Referrals_Texas['dropdown_mkrxh1cs'] == 'Preparing for Skins Subs'
+    ]
+    Marketer_Sums_PendingSkin = Incoming_Referrals_Texas_PendingSkin.groupby('Marketer_Name').agg(
+    Total_Wound_Size_cm = ('Wound_size_cm', 'sum'),
+    Patient_Count = ('Patient_Name', 'nunique')
+    )
+    Marketer_Sums_PendingSkin.to_csv(f'Marketer_Sums_PendingSkin_{timestamp}.csv', index = True)
     return Incoming_Referrals_Texas
 
 def Bridging_Marketer_Patient(Incoming_Referrals_Texas, collapsed_Patient_Name, timestamp):  
@@ -161,7 +229,6 @@ def Bridging_Marketer_Patient(Incoming_Referrals_Texas, collapsed_Patient_Name, 
 
     Bridge_Marketer.to_csv(f"Bridged_collapsed_Patient_{timestamp}.csv", index=True)
     Marketer_Billed = Bridge_Marketer.groupby('Marketer_Name')['Total_Billed'].count().to_frame(name='Total_Billed_Marketer')
-    Marketer_Billed.to_csv(f"WoundSize_By_Marketer_{timestamp}.csv", index=True)
     return Bridge_Marketer
 
 def Census_Board_Import(Census_data, Referrals_Billing, timestamp):
@@ -186,7 +253,7 @@ def Census_Board_Import(Census_data, Referrals_Billing, timestamp):
 
 def final_folder_cleaning(timestamp):
     folder_path = "/home/tym/Trinity_Mobile_Export/ty"
-    exceptions = {f"Marketer_Sums_{timestamp}.csv", f"Patient_Itemized_{timestamp}.csv", f"Patient_No_Note_{timestamp}.csv",f"Provider_Itemized_{timestamp}.csv",f"Bridged_collapsed_Patient_{timestamp}.csv",f"Overall_{timestamp}.csv", f"Total_Billed_Marketer_{timestamp}.csv", 'removeme.csv'}
+    exceptions = {f"Marketer_Sums_{timestamp}.csv", f"Patient_Itemized_{timestamp}.csv", f'Marketer_Sums_PendingSkin_{timestamp}.csv', f"Marketer_Sums_ActivePatients_{timestamp}.csv", 'patient_data', f"Provider_Itemized_{timestamp}.csv",f"Bridged_collapsed_Patient_{timestamp}.csv",f"Overall_{timestamp}.csv", f"Total_Billed_Marketer_{timestamp}.csv", 'removeme.csv', 'master_set.csv'}
 
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
@@ -202,11 +269,12 @@ def __main__():
     master_set = master_set_fcn(patient_data , Census_data, Scheduling_Texas_data, Incoming_Referrals_Texas_data)
     Provider_Itemized(master_set, timestamp)
     collapsed_Patient_Name = Patient_Itemized(master_set, timestamp)
-    Incoming_Referrals_Texas = Marketer_Itemized(collapsed_Patient_Name, timestamp)
+    Incoming_Referrals_Texas = Marketer_Itemized(collapsed_Patient_Name, master_set, timestamp)
     Bridging_Marketer_Patient(Incoming_Referrals_Texas, collapsed_Patient_Name, timestamp)
     Referrals_Billing = Bridging_Marketer_Patient(Incoming_Referrals_Texas, collapsed_Patient_Name, timestamp)
     Census_Board_Import(Census_data, Referrals_Billing, timestamp)
     final_folder_cleaning(timestamp)
+    
 
 if __name__ == "__main__":
     __main__()
