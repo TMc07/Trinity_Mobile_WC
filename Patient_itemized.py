@@ -3,6 +3,7 @@ import datetime
 import re
 from request_Script import main
 import os
+from pathlib import Path
 
 # Creates the timestamp for current days information
 timestamp = datetime.datetime.now().strftime("%Y%m%d")
@@ -10,6 +11,7 @@ timestamp = datetime.datetime.now().strftime("%Y%m%d")
 current_TimeStamp = main()
 
 combined_boards = {}
+Path_csv = Path('csv_folder')
 
 # Boards of interest are 8585885825 which is Billing, 8586310441 which is the Census Board, 9023723118 which is Scheduling - Texas, 9023703555 is Incoming Referrals - Texas
 
@@ -31,8 +33,7 @@ for board_id, patient_data in current_TimeStamp:
     df = pd.read_csv(patient_data)
     combined_boards[board_group] = df
 
-    df.to_csv(f"{board_id}.csv", index=False)
-    print(f"Saved cleaned CSV for board '{board_id}' as {board_id}.csv")
+    df.to_csv(Path_csv/ f"{board_id}.csv", index=False)
 
 def Capitalizing_ALL(df):
     df['Item Name'] = (df['Item Name']
@@ -89,14 +90,17 @@ def clean_patient_name(name):
     if str(name).strip().upper() == 'VILLARREAL,VANESSA':
         return 'VANESSA,VILLARREAL'
     
+    if str(name).strip().upper() == 'MARTINEZ,SURELIS':
+        return 'SURELIS,MARTINEZ'
+    
     
     return name
 
 # In its current form the billing data == patient data
-patient_data = pd.read_csv('8585885825.csv')
-Census_data = pd.read_csv('8586310441.csv')
-Scheduling_Texas_data = pd.read_csv('9023723118.csv')
-Incoming_Referrals_Texas_data = pd.read_csv('9023703555.csv')
+patient_data = pd.read_csv(Path_csv/ '8585885825.csv')
+Census_data = pd.read_csv(Path_csv/ '8586310441.csv')
+Scheduling_Texas_data = pd.read_csv(Path_csv/ '9023723118.csv')
+Incoming_Referrals_Texas_data = pd.read_csv(Path_csv/ '9023703555.csv')
 
 patient_data = Capitalizing_ALL(patient_data)
 Census_data = Capitalizing_ALL(Census_data)
@@ -104,6 +108,7 @@ Scheduling_Texas_data = Capitalizing_ALL(Scheduling_Texas_data)
 Incoming_Referrals_Texas_data = Capitalizing_ALL(Incoming_Referrals_Texas_data)
 
 def master_set_fcn(patient_data , Census_data, Scheduling_Texas_data, Incoming_Referrals_Texas_data):
+    patient_data['color_mkngbtn2'] = patient_data['color_mkngbtn2'].fillna('Not_Processed_Yet')
     left_half_df = Census_data.merge(patient_data, on='Patient_Name', how='left')
     adding_Scheduling_df = left_half_df.merge(Scheduling_Texas_data, on='Patient_Name', how='left')
     Incoming_Referrals_Texas_data = Incoming_Referrals_Texas_data.rename(columns={
@@ -113,11 +118,30 @@ def master_set_fcn(patient_data , Census_data, Scheduling_Texas_data, Incoming_R
         on='Patient_Name',
         how='left'
     )
+
+    # Creating Dummy for division of TrinityMWC
     master_set['conserv_dum'] = (master_set['dropdown_mkrxh1cs'] == 'Active Conservative Patient').astype(int)
     master_set['grafting_dum'] = master_set['dropdown_mkrxh1cs'].isin([
     'Preparing for Skins Subs',
     'Actively Receiving Skin Subs']).astype(int)
-    master_set.to_csv('master_set.csv', index=False)
+
+    # Adding in dummy for wellmed 
+    master_set['Wellmed_dum'] = master_set['dropdown_mkm1tc0g'].str.contains('Wellmed', na=False).astype(int)
+
+    Wellmed_patients = master_set[master_set['Wellmed_dum'] == 1]
+    Wellmed_patients = master_set.loc[master_set['Wellmed_dum'] == 1, ['Patient_Name', 'color_mkngbtn2', 'dropdown_mkrxh1cs']]
+    Wellmed_patients.to_csv(Path_csv/ f'Wellmed_patients{timestamp}.csv')
+
+    # Billing Groups processing (making Not Processed and Note Corrected but not Billed)
+    
+    master_set.loc[(master_set['date_mkrwcv4w'].notna()) & 
+        (master_set['color_mkngbtn2'] == 'No Note on File'), 
+       'color_mkngbtn2'] = 'Note Corrected but not Billed'
+    
+    # Removing Merge Errors that create interactions without a date of appointment given 
+    master_set = master_set[master_set['date4_y'] != ' '] 
+
+    master_set.to_csv(Path_csv/ 'master_set.csv', index=False)
     return master_set
 
 def Patient_Itemized(master_set, timestamp):
@@ -126,7 +150,7 @@ def Patient_Itemized(master_set, timestamp):
                 'numeric_mknghpcs', 'numeric_mkng9d2s', 'numeric_mkng6bmr', 'numeric_mkqnk160', 'numeric_mkqn9t3r']
 
     master_set['Total_Billed'] = master_set[Charge_codes].sum(axis=1)
-    master_set['color_mkngbtn2'] = master_set['color_mkngbtn2'].fillna('Not_Processed_Yet')
+
     Group_counts = master_set.groupby(['Patient_Name', 'color_mkngbtn2']).size().unstack(fill_value=0)
 
     billed_sums = master_set.groupby('Patient_Name')['Total_Billed'].sum().to_frame(name='Total_Billed')
@@ -145,12 +169,12 @@ def Patient_Itemized(master_set, timestamp):
 
     collapsed_Patient_Name = collapsed_Patient_Name.sort_values(by='Total_Billed', ascending=False)
 
-    collapsed_Patient_Name.to_csv(f"Patient_Itemized_{timestamp}.csv", index=True)
+    collapsed_Patient_Name.to_csv(Path_csv/ f"Patient_Itemized_{timestamp}.csv", index=True)
 
     # Making subset for patients that have an outstanding note 
     Patient_NoNote = collapsed_Patient_Name[collapsed_Patient_Name['No Note on File'] != 0]
     Patient_NoNote = Patient_NoNote.sort_values(by='No Note on File', ascending=False)
-    Patient_NoNote.to_csv(f"Patient_No_Note_{timestamp}.csv", index=True)
+    Patient_NoNote.to_csv(Path_csv/ f"Patient_No_Note_{timestamp}.csv", index=True)
 
     return collapsed_Patient_Name
 
@@ -175,33 +199,31 @@ def Provider_Itemized(master_set, timestamp):
     # Sorts in a desc order based on Total Billed
     collapsed_Provider_Name = collapsed_Provider_Name.sort_values(by='Total_Billed', ascending=False)
 
-    collapsed_Provider_Name.to_csv(f"Provider_Itemized_{timestamp}.csv", index=True)
+    collapsed_Provider_Name.to_csv(Path_csv/ f"Provider_Itemized_{timestamp}.csv", index=True)
 
     Provider_NoNote = collapsed_Provider_Name[collapsed_Provider_Name['No Note on File'] != 0]
     Provider_NoNote = Provider_NoNote.sort_values(by='No Note on File', ascending=False)
-    Provider_NoNote.to_csv(f"Provider_No_Note_{timestamp}.csv", index=True)
+    Provider_NoNote.to_csv(Path_csv/ f"Provider_No_Note_{timestamp}.csv", index=True)
 
 def Marketer_Itemized(collapsed_Patient_Name, master_set, timestamp):
     collapsed_Patient_Name['multiple_person_mkqagt70'] = collapsed_Patient_Name['multiple_person_mkqagt70'].fillna('NA')
     # This is wound size numeric_mknjsfxc
     Incoming_Referrals_Texas = collapsed_Patient_Name.rename(columns={'multiple_person_mkqagt70': 'Marketer_Name'})
-    Incoming_Referrals_Texas.to_csv(f"remove_{timestamp}.csv", index=True)
+    Incoming_Referrals_Texas.to_csv(Path_csv/ f"remove_{timestamp}.csv", index=True)
 
     #Pulls Wound size back in
     WoundxPatient = master_set[['Patient_Name', 'numeric_mknjsfxc', 'dropdown_mkrxh1cs']].drop_duplicates()
     Incoming_Referrals_Texas = Incoming_Referrals_Texas.merge(WoundxPatient, on = 'Patient_Name', how = 'left')
     Incoming_Referrals_Texas = Incoming_Referrals_Texas.rename(columns={'numeric_mknjsfxc': 'Wound_size_cm'})
-    print(Incoming_Referrals_Texas)
-    # Collapses back down to just the number of patients by each marketer
 
+    # Collapses back down to just the number of patients by each marketer
     Incoming_Referrals_Texas = Incoming_Referrals_Texas.reset_index()
     Marketer_Sums = Incoming_Referrals_Texas.groupby('Marketer_Name').agg(
     Total_Wound_Size_cm = ('Wound_size_cm', 'sum'),
     Patient_Count = ('Patient_Name', 'nunique')
 )
     
-    Marketer_Sums.to_csv(f"Marketer_Sums_{timestamp}.csv", index=True)
-    Incoming_Referrals_Texas.to_csv('removeme444.csv')
+    Marketer_Sums.to_csv(Path_csv/ f"Marketer_Sums_{timestamp}.csv", index=True)
     Incoming_Referrals_Texas_Active = Incoming_Referrals_Texas[
     Incoming_Referrals_Texas['dropdown_mkrxh1cs'] != 'Discharged From Pratice']
 
@@ -210,7 +232,7 @@ def Marketer_Itemized(collapsed_Patient_Name, master_set, timestamp):
     Patient_Count = ('Patient_Name', 'nunique')
     )
     
-    Marketer_Sums_Current.to_csv(f"Marketer_Sums_ActivePatients_{timestamp}.csv", index=True)
+    Marketer_Sums_Current.to_csv(Path_csv/ f"Marketer_Sums_ActivePatients_{timestamp}.csv", index=True)
 
     Incoming_Referrals_Texas_PendingSkin = Incoming_Referrals_Texas[
     Incoming_Referrals_Texas['dropdown_mkrxh1cs'] == 'Preparing for Skins Subs'
@@ -219,7 +241,7 @@ def Marketer_Itemized(collapsed_Patient_Name, master_set, timestamp):
     Total_Wound_Size_cm = ('Wound_size_cm', 'sum'),
     Patient_Count = ('Patient_Name', 'nunique')
     )
-    Marketer_Sums_PendingSkin.to_csv(f'Marketer_Sums_PendingSkin_{timestamp}.csv', index = True)
+    Marketer_Sums_PendingSkin.to_csv(Path_csv/ f'Marketer_Sums_PendingSkin_{timestamp}.csv', index = True)
     return Incoming_Referrals_Texas
 
 def Bridging_Marketer_Patient(Incoming_Referrals_Texas, collapsed_Patient_Name, timestamp):  
@@ -227,7 +249,7 @@ def Bridging_Marketer_Patient(Incoming_Referrals_Texas, collapsed_Patient_Name, 
     Incoming_trimmed = Incoming_Referrals_Texas[['Patient_Name', 'Marketer_Name']].drop_duplicates()
     Bridge_Marketer = collapsed_Patient_Name.merge(Incoming_trimmed, on = 'Patient_Name', how = 'left')
 
-    Bridge_Marketer.to_csv(f"Bridged_collapsed_Patient_{timestamp}.csv", index=True)
+    Bridge_Marketer.to_csv(Path_csv/ f"Bridged_collapsed_Patient_{timestamp}.csv", index=True)
     Marketer_Billed = Bridge_Marketer.groupby('Marketer_Name')['Total_Billed'].count().to_frame(name='Total_Billed_Marketer')
     return Bridge_Marketer
 
@@ -235,7 +257,6 @@ def Census_Board_Import(Census_data, Referrals_Billing, timestamp):
 
     Bridge_Census = Census_data.merge(Referrals_Billing, on = 'Patient_Name', how = 'left')
     Bridge_Census['Marketer_Name'] = Bridge_Census['Marketer_Name'].fillna('NA')
-    Bridge_Census.to_csv('removeme.csv')
     Marketer_WoundSize = (
         Bridge_Census
         .groupby(['Marketer_Name', 'dropdown_mkrxh1cs'])
@@ -249,11 +270,11 @@ def Census_Board_Import(Census_data, Referrals_Billing, timestamp):
     )
 
     Marketer_WoundSize = Marketer_WoundSize.rename(columns={'dropdown_mkrxh1cs': 'Census_Board_Group'})
-    Marketer_WoundSize.to_csv(f"Total_Billed_Marketer_{timestamp}.csv", index=False)
+    Marketer_WoundSize.to_csv(Path_csv/ f"Total_Billed_Marketer_{timestamp}.csv", index=False)
 
 def final_folder_cleaning(timestamp):
-    folder_path = "/home/tym/Trinity_Mobile_Export/ty"
-    exceptions = {f"Marketer_Sums_{timestamp}.csv", f"Patient_Itemized_{timestamp}.csv", f'Marketer_Sums_PendingSkin_{timestamp}.csv', f"Marketer_Sums_ActivePatients_{timestamp}.csv", 'patient_data', f"Provider_Itemized_{timestamp}.csv",f"Bridged_collapsed_Patient_{timestamp}.csv",f"Overall_{timestamp}.csv", f"Total_Billed_Marketer_{timestamp}.csv", 'removeme.csv', 'master_set.csv'}
+    folder_path = "/home/tym/Trinity_Mobile_Export/ty/csv_folder"
+    exceptions = {f"Marketer_Sums_{timestamp}.csv", f"Patient_Itemized_{timestamp}.csv", f'Wellmed_patients{timestamp}.csv', f'Marketer_Sums_PendingSkin_{timestamp}.csv', f"Marketer_Sums_ActivePatients_{timestamp}.csv", '8585885825.csv', f"Provider_Itemized_{timestamp}.csv",f"Bridged_collapsed_Patient_{timestamp}.csv",f"Overall_{timestamp}.csv", f"Total_Billed_Marketer_{timestamp}.csv", 'removeme.csv', 'master_set.csv'}
 
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
@@ -264,6 +285,13 @@ def final_folder_cleaning(timestamp):
                 print(f"Deleted: {filename}")
             except Exception as e:
                 print(f"Failed to delete {filename}: {e}")
+    
+    wipe_secondary_csv_folder()
+
+def wipe_secondary_csv_folder():
+    folder_path = Path("/home/tym/Trinity_Mobile_Export/ty")
+    for file in folder_path.glob("*.csv"):
+        file.unlink()
 
 def __main__():
     master_set = master_set_fcn(patient_data , Census_data, Scheduling_Texas_data, Incoming_Referrals_Texas_data)
@@ -279,5 +307,3 @@ def __main__():
 if __name__ == "__main__":
     __main__()
 
-
-# dropdown_mkrxh1cs for census group 
