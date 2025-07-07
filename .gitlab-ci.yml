@@ -6,7 +6,7 @@ send_daily_report:
   image: python:3.12
   script:
     - pip install --quiet --no-cache-dir -r requirements.txt || echo "No requirements.txt found"
-    - python Scheduled_mails.py
+    - python Scheduled_mail.py
   only:
     - schedules
   variables:
