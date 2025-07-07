@@ -127,10 +127,16 @@ def master_set_fcn(patient_data , Census_data, Scheduling_Texas_data, Incoming_R
 
     # Adding in dummy for wellmed 
     master_set['Wellmed_dum'] = master_set['dropdown_mkm1tc0g'].str.contains('Wellmed', na=False).astype(int)
+    master_set['date4_y'] = pd.to_datetime(master_set['date4_y'], errors='coerce')
 
+    # Trimming to only have wellmed patients then sorting by date (trimming to have only most recent date)
     Wellmed_patients = master_set[master_set['Wellmed_dum'] == 1]
-    Wellmed_patients = master_set.loc[master_set['Wellmed_dum'] == 1, ['Patient_Name', 'color_mkngbtn2', 'dropdown_mkrxh1cs']]
-    Wellmed_patients.to_csv(Path_csv/ f'Wellmed_patients{timestamp}.csv')
+    Wellmed_patients = Wellmed_patients.sort_values(['Patient_Name', 'date4_y'], ascending=[True, False])
+    Wellmed_patients = Wellmed_patients.drop_duplicates('Patient_Name', keep='first')
+
+    Wellmed_patients = Wellmed_patients[['Patient_Name','dropdown_mkrxh1cs', 'date4_y']]
+    Wellmed_patients = Wellmed_patients.sort_values(['dropdown_mkrxh1cs'], ascending=[True])
+    Wellmed_patients.to_csv(Path_csv/ f'Wellmed_patients{timestamp}.csv', index = False)
 
     # Billing Groups processing (making Not Processed and Note Corrected but not Billed)
     
@@ -145,11 +151,15 @@ def master_set_fcn(patient_data , Census_data, Scheduling_Texas_data, Incoming_R
     return master_set
 
 def Patient_Itemized(master_set, timestamp):
+    # Setting up local variables for both the cleaning of Patient name and the codes that hold billing information in the master
     master_set['Patient_Name'] = master_set['Patient_Name'].apply(clean_patient_name)
     Charge_codes = ['numeric_mkng945v', 'numeric_mkng1ekp', 'numeric_mkngdap1', 'numeric_mkngbb06',
                 'numeric_mknghpcs', 'numeric_mkng9d2s', 'numeric_mkng6bmr', 'numeric_mkqnk160', 'numeric_mkqn9t3r']
 
     master_set['Total_Billed'] = master_set[Charge_codes].sum(axis=1)
+
+    latest_status = master_set.sort_values('date4_y', ascending=False).drop_duplicates('Patient_Name')[
+        ['Patient_Name', 'dropdown_mkrxh1cs']].set_index('Patient_Name')
 
     Group_counts = master_set.groupby(['Patient_Name', 'color_mkngbtn2']).size().unstack(fill_value=0)
 
@@ -160,16 +170,23 @@ def Patient_Itemized(master_set, timestamp):
     billed_sums = master_set.groupby('Patient_Name')['Total_Billed'].sum().to_frame(name='Total_Billed')
     marketers_dist = marketers_dist.groupby('Patient_Name')['multiple_person_mkqagt70'].sum().to_frame(name='multiple_person_mkqagt70')
 
+    first_dates = master_set.groupby('Patient_Name')['date4_y'].min()
+    last_dates = master_set.groupby('Patient_Name')['date4_y'].max()
+    date_diffs = (last_dates - first_dates).dt.days.fillna(0).astype(int).to_frame(name='Days_On_Service')
+
     collapsed_Patient_Name = Group_counts.merge(billed_sums, left_index=True, right_index=True)
     collapsed_Patient_Name = collapsed_Patient_Name.merge(marketers_dist, left_index=True, right_index=True)
+    collapsed_Patient_Name = collapsed_Patient_Name.merge(latest_status, left_index=True, right_index=True)
+    collapsed_Patient_Name = collapsed_Patient_Name.merge(date_diffs, left_index=True, right_index=True)
 
 
-    cols = ['Total_Billed'] + [col for col in collapsed_Patient_Name.columns if col != 'Total_Billed']
+    cols = ['Total_Billed', 'dropdown_mkrxh1cs', 'Days_On_Service'] + [col for col in collapsed_Patient_Name.columns if col not in ['Total_Billed', 'dropdown_mkrxh1cs', 'Days_On_Service']]
     collapsed_Patient_Name = collapsed_Patient_Name[cols]
 
     collapsed_Patient_Name = collapsed_Patient_Name.sort_values(by='Total_Billed', ascending=False)
 
     collapsed_Patient_Name.to_csv(Path_csv/ f"Patient_Itemized_{timestamp}.csv", index=True)
+    collapsed_Patient_Name = collapsed_Patient_Name.drop(columns=['dropdown_mkrxh1cs'])
 
     # Making subset for patients that have an outstanding note 
     Patient_NoNote = collapsed_Patient_Name[collapsed_Patient_Name['No Note on File'] != 0]
@@ -274,7 +291,8 @@ def Census_Board_Import(Census_data, Referrals_Billing, timestamp):
 
 def final_folder_cleaning(timestamp):
     folder_path = "/home/tym/Trinity_Mobile_Export/ty/csv_folder"
-    exceptions = {f"Marketer_Sums_{timestamp}.csv", f"Patient_Itemized_{timestamp}.csv", f'Wellmed_patients{timestamp}.csv', f'Marketer_Sums_PendingSkin_{timestamp}.csv', f"Marketer_Sums_ActivePatients_{timestamp}.csv", '8585885825.csv', f"Provider_Itemized_{timestamp}.csv",f"Bridged_collapsed_Patient_{timestamp}.csv",f"Overall_{timestamp}.csv", f"Total_Billed_Marketer_{timestamp}.csv", 'removeme.csv', 'master_set.csv'}
+    exceptions = {f"Marketer_Sums_{timestamp}.csv", f"Patient_Itemized_{timestamp}.csv", f'Wellmed_patients{timestamp}.csv', f'Marketer_Sums_PendingSkin_{timestamp}.csv', f"Marketer_Sums_ActivePatients_{timestamp}.csv", f"Provider_Itemized_{timestamp}.csv", 
+    f"Overall_{timestamp}.csv", f"Total_Billed_Marketer_{timestamp}.csv", 'removeme.csv', 'master_set.csv'}
 
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
