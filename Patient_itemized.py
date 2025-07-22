@@ -4,6 +4,7 @@ import re
 from request_Script import main
 import os
 from pathlib import Path
+import numpy as np
 
 # Creates the timestamp for current days information
 timestamp = datetime.datetime.now().strftime("%Y%m%d")
@@ -30,7 +31,7 @@ for board_id, patient_data in current_TimeStamp:
         continue
     board_group = board_name[board_id_str]
 
-    df = pd.read_csv(patient_data)
+    df = pd.read_csv(Path_csv/ patient_data)
     combined_boards[board_group] = df
 
     df.to_csv(Path_csv/ f"{board_id}.csv", index=False)
@@ -135,8 +136,28 @@ def master_set_fcn(patient_data , Census_data, Scheduling_Texas_data, Incoming_R
     Wellmed_patients = Wellmed_patients.drop_duplicates('Patient_Name', keep='first')
 
     Wellmed_patients = Wellmed_patients[['Patient_Name','dropdown_mkrxh1cs', 'date4_y']]
-    Wellmed_patients = Wellmed_patients.sort_values(['dropdown_mkrxh1cs'], ascending=[True])
+    Wellmed_patients = Wellmed_patients.sort_values(['dropdown_mkrxh1cs'], ascending=[False])
     Wellmed_patients.to_csv(Path_csv/ f'Wellmed_patients{timestamp}.csv', index = False)
+
+    unique_provider = master_set['dropdown_mkm1tc0g'].unique()
+    print(unique_provider)
+
+    conditions = [
+        master_set['dropdown_mkm1tc0g'].str.contains('Wellmed', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains(r'\bUHC\b', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains(r'\bCigna\b', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains(r'\bBCBS\b', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains(r'\bHumana\b', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains(r'\bAetna\b', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains(r'\bMolina\b', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains(r'\bMedicare\b', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains('Devoted', na=False, case=False),
+        master_set['dropdown_mkm1tc0g'].str.contains('Humana - Managed by Conviva', na=False, case=False)
+        ]
+
+    choices = ['Wellmed', 'UHC', 'Cigna', 'BCBS', 'Humana', 'Aetna', 'Molina', 'Medicare', 'Devoted', 'Humana - managed Conviva']
+
+    master_set['payer_group'] = np.select(conditions, choices, default='Other')
 
     # Billing Groups processing (making Not Processed and Note Corrected but not Billed)
     
@@ -164,11 +185,13 @@ def Patient_Itemized(master_set, timestamp):
     Group_counts = master_set.groupby(['Patient_Name', 'color_mkngbtn2']).size().unstack(fill_value=0)
 
     billed_sums = master_set.groupby('Patient_Name')['Total_Billed'].sum().to_frame(name='Total_Billed')
-    marketers_dist = master_set.groupby('Patient_Name')['multiple_person_mkqagt70'].first().reset_index()
 
     Group_counts = master_set.groupby(['Patient_Name', 'color_mkngbtn2']).size().unstack(fill_value=0)
     billed_sums = master_set.groupby('Patient_Name')['Total_Billed'].sum().to_frame(name='Total_Billed')
-    marketers_dist = marketers_dist.groupby('Patient_Name')['multiple_person_mkqagt70'].sum().to_frame(name='multiple_person_mkqagt70')
+
+    marketer_sum = master_set.groupby('Patient_Name')['multiple_person_mkqagt70'].first().to_frame(name='multiple_person_mkqagt70')
+    payer_group_first = master_set.groupby('Patient_Name')['payer_group'].first().to_frame()
+    marketers_dist = marketer_sum.merge(payer_group_first, left_index=True, right_index=True)
 
     first_dates = master_set.groupby('Patient_Name')['date4_y'].min()
     last_dates = master_set.groupby('Patient_Name')['date4_y'].max()
@@ -180,7 +203,7 @@ def Patient_Itemized(master_set, timestamp):
     collapsed_Patient_Name = collapsed_Patient_Name.merge(date_diffs, left_index=True, right_index=True)
 
 
-    cols = ['Total_Billed', 'dropdown_mkrxh1cs', 'Days_On_Service'] + [col for col in collapsed_Patient_Name.columns if col not in ['Total_Billed', 'dropdown_mkrxh1cs', 'Days_On_Service']]
+    cols = ['Total_Billed', 'dropdown_mkrxh1cs', 'Days_On_Service' , 'multiple_person_mkqagt70', 'payer_group'] + [col for col in collapsed_Patient_Name.columns if col not in ['Total_Billed', 'dropdown_mkrxh1cs', 'Days_On_Service' , 'multiple_person_mkqagt70', 'payer_group']]
     collapsed_Patient_Name = collapsed_Patient_Name[cols]
 
     collapsed_Patient_Name = collapsed_Patient_Name.sort_values(by='Total_Billed', ascending=False)
@@ -290,7 +313,7 @@ def Census_Board_Import(Census_data, Referrals_Billing, timestamp):
     Marketer_WoundSize.to_csv(Path_csv/ f"Total_Billed_Marketer_{timestamp}.csv", index=False)
 
 def final_folder_cleaning(timestamp):
-    folder_path = "/home/tym/Trinity_Mobile_Export/ty/csv_folder"
+    folder_path = "/home/tym/Trinity_Mobile_WC/csv_folder"
     exceptions = {f"Marketer_Sums_{timestamp}.csv", f"Patient_Itemized_{timestamp}.csv", f'Wellmed_patients{timestamp}.csv', f'Marketer_Sums_PendingSkin_{timestamp}.csv', f"Marketer_Sums_ActivePatients_{timestamp}.csv", f"Provider_Itemized_{timestamp}.csv", 
     f"Overall_{timestamp}.csv", f"Total_Billed_Marketer_{timestamp}.csv", 'removeme.csv', 'master_set.csv'}
 
@@ -307,7 +330,7 @@ def final_folder_cleaning(timestamp):
     wipe_secondary_csv_folder()
 
 def wipe_secondary_csv_folder():
-    folder_path = Path("/home/tym/Trinity_Mobile_Export/ty")
+    folder_path = Path("/home/tym/Trinity_Mobile_WC")
     for file in folder_path.glob("*.csv"):
         file.unlink()
 
