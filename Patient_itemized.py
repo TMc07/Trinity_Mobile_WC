@@ -48,7 +48,6 @@ def Capitalizing_ALL(df):
     df = df.rename(columns={'Item Name': 'Patient_Name'})
     return df
 
-
 def clean_patient_name(name):
     if pd.isnull(name):
         return name
