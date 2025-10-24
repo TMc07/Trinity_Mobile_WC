@@ -74,7 +74,7 @@ def fetch_board_items(board_id):
 
 def export_to_csv(df, board_id):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    df.to_csv(f"monday_export_{board_id}_{timestamp}.csv", index=False)
+    df.to_csv(f"csv_folder/monday_export_{board_id}_{timestamp}.csv", index=False)
     csv_timestamp = f"monday_export_{board_id}_{timestamp}.csv"
     print(f"Exported {len(df)} items at {timestamp} for board # {board_id}")
     return csv_timestamp, df
@@ -82,12 +82,48 @@ def export_to_csv(df, board_id):
 def main():
     monday_boards = []
     # Boards of interest are 8585885825 which is Billing, 8586310441 which is the Census Board, 9023723118 which is Scheduling - Texas, 9023703555 is Incoming Referrals - Texas, 
-    board_id = '8585885825', '8586310441', '9023723118', '9023703555'
+    board_id = '8585885825', '8586310441', '9023723118', '9023703555', '9893934656'
 
     for board_id in board_id:
         df = fetch_board_items(board_id)
         current_TimeStamp, df = export_to_csv(df, board_id)
         monday_boards.append((board_id, current_TimeStamp))
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    df = pd.read_csv(f"csv_folder/monday_export_{'9893934656'}_{timestamp}.csv")
+    rename_map = {
+    "dropdown_mkv5t588": "dropdown_mkrxh1cs",
+    "text_mkv56kmm": "text_mkv5d5q0",
+    "location_mkv59p48": "location_mkv56zmh",
+    "color_mkv5ys2r": "color_mkv5zem0",
+    "color_mkv513br": "color_mknjsnb0",
+    "color_mkv5902g": "color_mksm4ff9",
+    "numeric_mkv5fqpc": "numeric_mknj2b0q",
+    "numeric_mkv5x8dk": "numeric_mknjsfxc",
+    "text_mkv5kekx": "text_mkt975v7",
+    "dropdown_mkv5g7n6": "dropdown_mknjyvdf",
+    "dropdown_mkv5xktq": "dropdown_mknjq1sw",
+    "dropdown_mkv51mfr": "dropdown_mknj8zrs",
+    "color_mkv538kn": "color_mknjqkk4",
+    "color_mkv5236x": "color_mksmdve",
+    "dropdown_mkv5mjdt": "dropdown_mknjhbj2",
+    "color_mkv51jh2": "color_mknj2g92",
+    "date_mkv5jac0": "date_mknja77s",
+    "dropdown_mkv52txc": "dropdown_mknjdbxr",
+    "color_mkv5w81t": "color_mknjb7ce",
+    "color_mkv5k0wq": "color_mknjegtm",
+    "color_mkv5tewy": "color_mknjgatn",
+    "color_mkv5fbry": "color_mknj1n1b",
+    "color_mkv54hpx": "color_mknj1agk",
+    "color_mkv5hx99": "color_mknjzahg",
+    "color_mkv5rtja": "color_mknj8ryr",
+    "date_mkv5x30x": "date_mknjwhgr",
+    "color_mkv5xkfn": "color_mknjp4dv"
+    }
+
+    df = df.rename(columns = rename_map)
+
+    df.to_csv(f"csv_folder/monday_export_{'9893934656'}_{timestamp}.csv")
 
     return monday_boards
 

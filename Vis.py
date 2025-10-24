@@ -9,8 +9,8 @@ pngs = Path('pngs')
 Path_csv = Path('csv_folder')
 
 Marketer_sums = pd.read_csv(Path_csv/ f'Marketer_Sums_{timestamp}.csv')
-# Removing the 0's two Marketers aren't listed on old discharges
-Marketer_sums = Marketer_sums[Marketer_sums['Marketer_Name'] != '0']
+Marketer_sums['Marketer_Name'] = Marketer_sums['Marketer_Name'].fillna("Michelle Williams")
+Marketer_sums = Marketer_sums.groupby('Marketer_Name', as_index = False).sum()
 
 plt.figure(figsize=(8, 6))
 plt.bar(Marketer_sums['Marketer_Name'], Marketer_sums['Total_Wound_Size_cm'], color='skyblue', edgecolor='black')
@@ -21,6 +21,8 @@ plt.ylabel('Total wound size in cm')
 plt.savefig(pngs/ 'Marketer_distribution_Wounds.png')
 
 Marketer_sums_Active = pd.read_csv(Path_csv/ f'Marketer_Sums_ActivePatients_{timestamp}.csv')
+Marketer_sums_Active['Marketer_Name'] = Marketer_sums_Active['Marketer_Name'].fillna("Michelle Williams")
+Marketer_sums_Active = Marketer_sums_Active.groupby('Marketer_Name', as_index = False).sum()
 
 plt.figure(figsize=(8, 6))
 plt.bar(Marketer_sums_Active['Marketer_Name'], Marketer_sums_Active['Total_Wound_Size_cm'], color='skyblue', edgecolor='black')
@@ -30,6 +32,8 @@ plt.ylabel('Total wound size in cm')
 plt.savefig(pngs/ 'Marketer_sums_Active_Wounds.png')
 
 Marketer_sums_Pending_Skin = pd.read_csv(Path_csv/ f'Marketer_Sums_PendingSkin_{timestamp}.csv')
+Marketer_sums_Pending_Skin['Marketer_Name'] = Marketer_sums_Pending_Skin['Marketer_Name'].fillna("Michelle Williams")
+Marketer_sums_Pending_Skin = Marketer_sums_Pending_Skin.groupby('Marketer_Name', as_index = False).sum()
 
 plt.figure(figsize=(8, 6))
 plt.bar(Marketer_sums_Pending_Skin['Marketer_Name'], Marketer_sums_Pending_Skin['Total_Wound_Size_cm'], color='skyblue', edgecolor='black')
@@ -59,3 +63,7 @@ plt.ylabel(f'Number of Notes Missing as of {timestamp}')
 plt.xticks(rotation=45, ha='right')
 plt.tight_layout()
 plt.savefig(pngs/ 'Providers_by_NoNote.png')
+
+providers_to_exclude = ['Provider Name 1', 'Provider Name 2'] 
+
+Provider_sums_filtered = Provider_sums[~Provider_sums['Provider_Name'].isin(providers_to_exclude)]
