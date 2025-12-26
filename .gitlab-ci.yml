@@ -1,0 +1,13 @@
+stages:
+  - Scheduled_mail
+
+send_daily_report:
+  stage: Scheduled_mail
+  image: python:3.12
+  script:
+    - pip install --quiet --no-cache-dir -r requirements.txt || echo "No requirements.txt found"
+    - python Scheduled_mail.py
+  only:
+    - schedule
+  variables:
+    TZ: "UTC"
