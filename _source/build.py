@@ -118,17 +118,18 @@ def header_html(path):
         '<a class="btn call-mobile" href="tel:{{PHONE_TEL}}">Call</a>'
         '<button class="menu" aria-expanded="false" aria-controls="navigation">Menu ☰</button>'
         '<nav id="navigation" aria-label="Main navigation">'
-        '<a href="/#approach">Our approach</a>'
-        '<div class="has-sub"><a href="/programs/"%s%s>Programs</a><div class="sub">%s</div></div>'
+                '<div class="has-sub"><a href="/programs/"%s%s>Programs</a><div class="sub">%s</div></div>'
+        '<a href="/areas-we-serve/"%s>Areas we serve</a>'
         '<a href="/partners/"%s>Partners</a>'
         '<a href="/faq/"%s>FAQ</a>'
+        '<a href="/contact/"%s>Contact</a>'
         '<a class="navcall" href="tel:{{PHONE_TEL}}">{{PHONE}}</a>'
         '<a class="btn" href="/partners/#refer">Refer a patient <span aria-hidden="true">↗</span></a>'
         "</nav></div></header>"
-    ) % (cur("/programs/"), parent if not cur("/programs/") else "", subs, cur("/partners/"), cur("/faq/"))
+    ) % (cur("/programs/"), parent if not cur("/programs/") else "", subs, cur("/areas-we-serve/"), cur("/partners/"), cur("/faq/"), cur("/contact/"))
 
 
-TOPLINE = '<div class="topline"><div class="wrap"><span>Confidence Through Continuity.</span><span>Telehealth across all of Texas</span></div></div>'
+TOPLINE = '<div class="topline"><div class="wrap"><span>Confidence Through Continuity.</span><a href="/areas-we-serve/">Telehealth across all of Texas</a></div></div>'
 
 FOOTER = (
     '<footer><div class="wrap"><div class="footer-main"><div>'
@@ -141,6 +142,7 @@ FOOTER = (
     '<a href="/palliative-care/">Palliative Care</a>'
     '<a href="/transitional-care-management/">Transitional Care</a></div>'
     '<div><h4>Trinity</h4>'
+    '<a href="/areas-we-serve/">Areas we serve</a>'
     '<a href="/partners/">For healthcare partners</a>'
     '<a href="/faq/">FAQ</a>'
     '<a href="/contact/">Contact</a>'
