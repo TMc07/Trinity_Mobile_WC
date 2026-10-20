@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://trinitycarecontinuum.com/</loc>
-    <lastmod>2026-10-20</lastmod>
-  </url>
-  <url>
-    <loc>https://trinitycarecontinuum.com/privacy.html</loc>
-    <lastmod>2026-10-20</lastmod>
-  </url>
+  <url><loc>https://trinitycarecontinuum.com/behavioral-health-integration/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/chronic-care-management/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/contact/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/faq/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/palliative-care/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/partners/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/privacy/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/programs/</loc></url>
+  <url><loc>https://trinitycarecontinuum.com/transitional-care-management/</loc></url>
 </urlset>
