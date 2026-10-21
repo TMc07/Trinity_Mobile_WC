@@ -153,3 +153,6 @@ nav a{white-space:nowrap}
 .program-grid.four{grid-template-columns:repeat(4,1fr)}
 @media(max-width:1000px){.program-grid.four{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:740px){.program-grid.four{grid-template-columns:1fr}}
+
+.program-grid .program.wide{grid-column:1/-1}
+@media(min-width:901px){.program-grid .program.wide p{max-width:760px}}

@@ -37,6 +37,7 @@ PROGRAM_NAV = [
     ("Anxiety and/or Depression", "/anxiety-and-depression/"),
     ("Palliative Care", "/palliative-care/"),
     ("Transitional Care Management", "/transitional-care-management/"),
+    ("Wound Care", "/wound-care/"),
     ("All programs", "/programs/"),
 ]
 
@@ -112,7 +113,7 @@ def header_html(path):
             return ' aria-current="page"'
         return ""
 
-    parent = ' aria-current="true"' if path.startswith(("/programs/", "/chronic-", "/anxiety-", "/palliative-", "/transitional-")) and path != "/programs/" else ""
+    parent = ' aria-current="true"' if path.startswith(("/programs/", "/chronic-", "/anxiety-", "/palliative-", "/transitional-", "/wound-")) and path != "/programs/" else ""
     subs = "".join('<a href="%s"%s>%s</a>' % (u, cur(u), n) for n, u in PROGRAM_NAV)
     return (
         '<header><div class="wrap nav">'
@@ -143,7 +144,7 @@ FOOTER = (
     '<a href="/chronic-care-management/">Chronic Care Management</a>'
     '<a href="/anxiety-and-depression/">Anxiety and/or Depression</a>'
     '<a href="/palliative-care/">Palliative Care</a>'
-    '<a href="/transitional-care-management/">Transitional Care</a></div>'
+    '<a href="/transitional-care-management/">Transitional Care</a><a href="/wound-care/">Wound Care</a></div>'
     '<div><h4>Trinity</h4>'
     '<a href="/areas-we-serve/">Areas we serve</a>'
     '<a href="/partners/">For healthcare partners</a>'
