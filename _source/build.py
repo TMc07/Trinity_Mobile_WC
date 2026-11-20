@@ -29,7 +29,7 @@ SITE = {
     "EMAIL": "intake@trinitymwc.com",
     "FAX": "800-915-0474",
     "FAX_TEL": "+18009150474",
-    "JOTFORM": "https://form.jotform.com/260365813296058",
+    "JOTFORM": "https://form.jotform.com/263227040533044",
 }
 
 PROGRAM_NAV = [
